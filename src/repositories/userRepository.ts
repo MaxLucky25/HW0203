@@ -94,7 +94,9 @@ export const userRepository = {
 
 
     async findByConfirmationCode(code: string): Promise<UserDBType | null> {
-        return await userCollection.findOne({ "emailConfirmation.confirmationCode": code }, { projection: { _id: 0 } });
+        return userCollection.findOne({
+            "emailConfirmation.confirmationCode": code
+        });
     },
 
     async findByLoginOrEmail(loginOrEmail: string): Promise<UserDBType | null> {

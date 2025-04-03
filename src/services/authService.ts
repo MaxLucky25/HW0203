@@ -1,63 +1,76 @@
-import { randomUUID } from "crypto";
-import { add } from "date-fns";
-import { EmailConfirmationType, UserDBType } from "../models/userModel";
+import crypto from 'crypto';
+import { UserDBType } from "../models/userModel";
 import { userRepository } from "../repositories/userRepository";
 import { bcryptService } from "./bcryptService";
 import { emailService } from "./emailService";
 
 
-
+const uuidv4 = () => crypto.randomUUID()
 
 export const authService = {
     async registerUser(login: string, password: string, email: string): Promise<UserDBType | null> {
-        if (await userRepository.doesExistByLoginOrEmail(login, email)) return null;
+        // Проверяем существование пользователя
+        const existingUser = await userRepository.doesExistByLoginOrEmail(login, email);
+        if (existingUser) return null;
 
+        // Генерируем хеш пароля
         const passwordHash = await bcryptService.generateHash(password);
-        const emailConfirmation = generateEmailConfirmation();
 
+        // Создаём объект подтверждения
+        const emailConfirmation = {
+            confirmationCode: uuidv4(), // Используем UUID вместо случайных чисел
+            expirationDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 часа
+            isConfirmed: false
+        };
+
+        // Создаём пользователя
         const newUser: UserDBType = {
-            id: Date.now().toString(),
+            id: uuidv4(),
             login,
             password: passwordHash,
             email,
             createdAt: new Date().toISOString(),
-            emailConfirmation,
+            emailConfirmation
         };
 
-        await userRepository.create(newUser);
-        await emailService.sendRegistrationEmail(newUser.email, emailConfirmation.confirmationCode);
+        // Сохраняем пользователя
+        const created = await userRepository.create(newUser);
+
+        // Отправляем письмо
+        await emailService.sendRegistrationEmail(email, emailConfirmation.confirmationCode);
+
         return newUser;
     },
 
     async confirmRegistration(code: string): Promise<boolean> {
         const user = await userRepository.findByConfirmationCode(code);
-        if (!user || new Date() > new Date(user.emailConfirmation.expirationDate) || user.emailConfirmation.isConfirmed) {
+
+        if (!user ||
+            user.emailConfirmation.isConfirmed ||
+            new Date() > user.emailConfirmation.expirationDate
+        ) {
             return false;
         }
 
-        return await userRepository.updateConfirmation(user.id, { isConfirmed: true });
+        return userRepository.updateConfirmation(user.id, { isConfirmed: true });
     },
 
     async resendRegistrationEmail(email: string): Promise<boolean> {
         const user = await userRepository.getByEmail(email);
-        if (!user || user.emailConfirmation.isConfirmed) return false;
 
-        const emailConfirmation = generateEmailConfirmation();
-        const updated = await userRepository.updateConfirmation(user.id, emailConfirmation);
+        if (!user || user.emailConfirmation.isConfirmed) {
+            return false;
+        }
 
-        return updated && await emailService.sendRegistrationEmail(
-            user.email,
-            emailConfirmation.confirmationCode
-        );
+        const newConfirmation = {
+            confirmationCode: uuidv4(),
+            expirationDate: new Date(Date.now() + 24 * 60 * 60 * 1000)
+        };
+
+        await userRepository.updateConfirmation(user.id, newConfirmation);
+        return emailService.sendRegistrationEmail(email, newConfirmation.confirmationCode);
     }
 
 
 };
 
-function generateEmailConfirmation(): EmailConfirmationType {
-    return {
-        confirmationCode: randomUUID(),
-        expirationDate: add(new Date(), { hours: 1, minutes: 30 }),
-        isConfirmed: false,
-    };
-}

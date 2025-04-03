@@ -1,17 +1,21 @@
 import { commentRepository } from "../repositories/commentRepository";
-import { CreateCommentDto, UpdateCommentDto } from "../models/commentModels";
+import {CommentViewModel, CreateCommentDto, UpdateCommentDto} from "../models/commentModels";
 import { postRepository } from "../repositories/postRepository";
 import {Result, ResultStatus} from "../models/resultModels";
 
 export const commentService = {
-    async createComment(postId: string,
-                        input: CreateCommentDto, commentatorInfo:
-                        { userId: string, userLogin: string }) {
-        // Проверяем, существует ли пост
+    async createComment(postId: string, input: CreateCommentDto, commentatorInfo: {
+        userId: string;
+        userLogin: string
+    }): Promise<CommentViewModel | null> {
+        // Проверяем существование поста
         const post = await postRepository.getById(postId);
         if (!post) return null;
 
+        // Создаём комментарий
         const newComment = await commentRepository.create(postId, input, commentatorInfo);
+
+        // Возвращаем в правильном формате
         return {
             id: newComment.id,
             content: newComment.content,

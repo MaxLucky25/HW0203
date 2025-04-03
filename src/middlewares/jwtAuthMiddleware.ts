@@ -1,28 +1,29 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import jwt, {JwtPayload} from 'jsonwebtoken';
+import config from "../utility/config";
 
-const JWT_SECRET = process.env.JWT_SECRET || 'default_secret';
 
-export const jwtAuthMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+
+export const jwtAuthMiddleware = (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
         res.sendStatus(401);
         return;
     }
 
     const token = authHeader.split(' ')[1];
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET) as {
-            userId: string,
-            login: string,
-            email: string
-        };
 
+    try {
+        const decoded = jwt.verify(token, config.JWT_SECRET) as JwtPayload;
         req.userId = decoded.userId;
         req.userLogin = decoded.login;
         req.userEmail = decoded.email;
+
+        // Сохраняем токен для тестов
+        (req as any).state = { accessToken: token };
         next();
-    } catch (error) {
+    } catch (e) {
         res.sendStatus(401);
     }
 };
