@@ -21,4 +21,7 @@ app.use('/testing', testingRouters);
 app.use('/users', userRouter)
 app.use('/auth', authRouter);
 app.use('/comments', commentRouter);
+if (process.env.NODE_ENV === 'test') {
+    app.use('/testing', testingRouters);
+}
 export default app;
