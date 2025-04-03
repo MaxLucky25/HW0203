@@ -4,7 +4,7 @@ import { userService } from "../services/userService";
 import jwt from 'jsonwebtoken';
 import { jwtAuthMiddleware } from "../middlewares/jwtAuthMiddleware";
 import {confirmationValidators, emailResendingValidators, loginValidators, registrationValidators} from "../validators/authValidators";
-import {authMailService} from "../services/authMailService";
+import {authService} from "../services/authService";
 
 
 const JWT_SECRET= process.env.JWT_SECRET || 'default_secret';
@@ -59,7 +59,7 @@ authRouter.post('/registration',
     inputCheckErrorsMiddleware,
     async (req: Request, res: Response) => {
         const { login, password, email } = req.body;
-        const user = await authMailService.registerUser(login, password, email);
+        const user = await authService.registerUser(login, password, email);
         if (!user) {
             res.status(400).json({
                 errorsMessages: [{ field: "loginOrEmail", message: "User already exists or invalid input" }]
@@ -77,7 +77,7 @@ authRouter.post('/registration-confirmation',
     inputCheckErrorsMiddleware,
     async (req: Request, res: Response) => {
         const { code } = req.body;
-        const confirmed = await authMailService.confirmRegistration(code);
+        const confirmed = await authService.confirmRegistration(code);
         if (!confirmed) {
             res.status(400).json({
                 errorsMessages: [{ field: "code", message: "Incorrect, expired, or already confirmed code" }]
@@ -94,7 +94,7 @@ authRouter.post('/registration-email-resending',
     inputCheckErrorsMiddleware,
     async (req: Request, res: Response) => {
         const { email } = req.body;
-        const sent = await authMailService.resendRegistrationEmail(email);
+        const sent = await authService.resendRegistrationEmail(email);
         if (!sent) {
             res.status(400).json({
                 errorsMessages: [{ field: "email", message: "Invalid email or email already confirmed" }]

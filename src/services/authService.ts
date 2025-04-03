@@ -7,7 +7,8 @@ import { emailService } from "./emailService";
 
 
 
-export const authMailService = {
+
+export const authService = {
     async registerUser(login: string, password: string, email: string): Promise<UserDBType | null> {
         if (await userRepository.doesExistByLoginOrEmail(login, email)) return null;
 
@@ -46,17 +47,7 @@ export const authMailService = {
         return await emailService.sendRegistrationEmail(user.email, emailConfirmation.confirmationCode);
     },
 
-    // async loginUser(loginOrEmail: string, password: string): Promise<{ accessToken: string } | null> {
-    //     const user = await userRepository.findByLoginOrEmail(loginOrEmail);
-    //     if (!user || !(await bcryptService.compareHash(password, user.password))) return null;
-    //
-    //     const accessToken = jwt.sign(
-    //         { userId: user.id, login: user.login, email: user.email },
-    //         process.env.JWT_SECRET,
-    //         { expiresIn: process.env.JWT_EXPIRES_IN }
-    //     );
-    //     return { accessToken };
-    // },
+
 };
 
 function generateEmailConfirmation(): EmailConfirmationType {

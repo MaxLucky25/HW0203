@@ -2,6 +2,7 @@ import {CreateUserDto, EmailConfirmationType, UserDBType, UserViewModel} from ".
 import {userCollection} from "../db/mongo-db";
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import {emailService} from "../services/emailService";
 
 
 const SALT_ROUNDS = 10;
@@ -20,20 +21,25 @@ export const userRepository = {
         return (await this.getByLogin(loginOrEmail)) ?? (await this.getByEmail(loginOrEmail));
     },
 
-    // async doesExistByLoginOrEmail(login: string, email: string): Promise<UserDBType | null> {
-    //     const byLogin = await this.getByLogin(login);
-    //     if (byLogin) return byLogin;
-    //     const byEmail = await this.getByEmail(email);
-    //     return byEmail;
-    // },
-
     async doesExistByLoginOrEmail(login: string, email: string): Promise<UserDBType | null> {
-        return (await this.getByLogin(login)) ?? (await this.getByEmail(email));
+        const byLogin = await this.getByLogin(login);
+        if (byLogin) return byLogin;
+        const byEmail = await this.getByEmail(email);
+        return byEmail;
     },
 
-    // Создаем пользователя, включая поле emailConfirmation
-    async create(input: CreateUserDto): Promise<UserViewModel> {
+
+    async create(input: CreateUserDto): Promise<UserViewModel | { errorsMessages: { field: string; message: string }[] }> {
+        // Проверка существующих пользователей по логину или email
+        const existingUser = await this.getByLoginOrEmail(input.login) ?? await this.getByEmail(input.email);
+        if (existingUser) {
+            return {
+                errorsMessages: [{ field: existingUser.login === input.login ? 'login' : 'email', message: 'should be unique' }]
+            };
+        }
+        // Хеширование пароля
         const hashedPassword = await bcrypt.hash(input.password, SALT_ROUNDS);
+        // Создание нового пользователя с подтверждением email
         const newUser: UserDBType = {
             id: crypto.randomUUID(),
             login: input.login,
@@ -42,81 +48,47 @@ export const userRepository = {
             createdAt: new Date().toISOString(),
             emailConfirmation: {
                 confirmationCode: crypto.randomUUID(),
-                expirationDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
-                isConfirmed: false,
+                expirationDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 часа
+                isConfirmed: false
             }
         };
 
+        // Вставка нового пользователя в базу данных
         await userCollection.insertOne(newUser);
+
+        // Отправка email с кодом подтверждения
+        await emailService.sendEmail(
+            input.email,
+            'Подтверждение регистрации',
+            `Ваш код подтверждения: ${newUser.emailConfirmation.confirmationCode}`,
+            `<p>Ваш код подтверждения: <b>${newUser.emailConfirmation.confirmationCode}</b></p>`
+        );
+        // Возвращаем результат с преобразованными данными пользователя
         return this.mapToOutput(newUser);
     },
 
-    // async create(input: CreateUserDto): Promise<UserViewModel | { errorsMessages: { field: string; message: string }[] }> {
-    //     // Проверка существующих пользователей по логину или email
-    //     const existingUser = await this.getByLoginOrEmail(input.login) ?? await this.getByEmail(input.email);
-    //     if (existingUser) {
-    //         return {
-    //             errorsMessages: [{ field: existingUser.login === input.login ? 'login' : 'email', message: 'should be unique' }]
-    //         };
-    //     }
-    //     // Хеширование пароля
-    //     const hashedPassword = await bcrypt.hash(input.password, SALT_ROUNDS);
-    //     // Создание нового пользователя с подтверждением email
-    //     const newUser: UserDBType = {
-    //         id: crypto.randomUUID(),
-    //         login: input.login,
-    //         email: input.email,
-    //         password: hashedPassword,
-    //         createdAt: new Date().toISOString(),
-    //         emailConfirmation: {
-    //             confirmationCode: crypto.randomUUID(),
-    //             expirationDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 часа
-    //             isConfirmed: false
-    //         }
-    //     };
-    //
-    //     // Вставка нового пользователя в базу данных
-    //     await userCollection.insertOne(newUser);
-    //
-    //     // Отправка email с кодом подтверждения
-    //     await emailService.sendEmail(
-    //         input.email,
-    //         'Подтверждение регистрации',
-    //         `Ваш код подтверждения: ${newUser.emailConfirmation.confirmationCode}`,
-    //         `<p>Ваш код подтверждения: <b>${newUser.emailConfirmation.confirmationCode}</b></p>`
-    //     );
-    //     // Возвращаем результат с преобразованными данными пользователя
-    //     return this.mapToOutput(newUser);
-    // },
-
-    // async updateConfirmation(userId: string, updateData: Partial<EmailConfirmationType>): Promise<boolean> {
-    //     const updateFields: Record<string, any> = {};
-    //
-    //     if (updateData.confirmationCode !== undefined) {
-    //         updateFields["emailConfirmation.confirmationCode"] = updateData.confirmationCode;
-    //     }
-    //     if (updateData.expirationDate !== undefined) {
-    //         updateFields["emailConfirmation.expirationDate"] = updateData.expirationDate;
-    //     }
-    //     if (updateData.isConfirmed !== undefined) {
-    //         updateFields["emailConfirmation.isConfirmed"] = updateData.isConfirmed;
-    //     }
-    //
-    //     const result = await userCollection.updateOne(
-    //         { id: userId },
-    //         { $set: updateFields }
-    //     );
-    //
-    //     return result.modifiedCount === 1;
-    // },
-
     async updateConfirmation(userId: string, updateData: Partial<EmailConfirmationType>): Promise<boolean> {
+        const updateFields: Record<string, any> = {};
+
+        if (updateData.confirmationCode !== undefined) {
+            updateFields["emailConfirmation.confirmationCode"] = updateData.confirmationCode;
+        }
+        if (updateData.expirationDate !== undefined) {
+            updateFields["emailConfirmation.expirationDate"] = updateData.expirationDate;
+        }
+        if (updateData.isConfirmed !== undefined) {
+            updateFields["emailConfirmation.isConfirmed"] = updateData.isConfirmed;
+        }
+
         const result = await userCollection.updateOne(
             { id: userId },
-            { $set: updateData }
+            { $set: updateFields }
         );
+
         return result.modifiedCount === 1;
     },
+
+
 
     async findByConfirmationCode(code: string): Promise<UserDBType | null> {
         return await userCollection.findOne({ "emailConfirmation.confirmationCode": code }, { projection: { _id: 0 } });
