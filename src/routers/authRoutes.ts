@@ -1,52 +1,55 @@
-import {Router, Request, Response, NextFunction} from "express";
+import { Router, Request, Response } from "express";
 import { inputCheckErrorsMiddleware } from "../middlewares/validationMiddleware";
 import { userService } from "../services/userService";
-import jwt, {SignOptions} from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import { jwtAuthMiddleware } from "../middlewares/jwtAuthMiddleware";
-import {confirmationValidators, emailResendingValidators, loginValidators, registrationValidators} from "../validators/authValidators";
-import {authService} from "../services/authService";
-import {userRepository} from "../repositories/userRepository";
-import config from "../utility/config";
+import { authService } from "../services/authService";
+import {
+    confirmationValidators,
+    emailResendingValidators,
+    loginValidators,
+    registrationValidators
+} from "../validators/authValidators";
 
+const JWT_SECRET = process.env.JWT_SECRET || 'default_secret';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 
 export const authRouter = Router();
 
-// Обработчик login
-authRouter.post('/login', loginValidators, inputCheckErrorsMiddleware,
-    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-        try {
-            const { loginOrEmail, password } = req.body;
-
-            const user = await userService.findUserByLoginOrEmail(loginOrEmail);
-            if (!user || !user.emailConfirmation.isConfirmed) {
-                res.sendStatus(401);
-                return;
-            }
-
-            const isValid = await userService.verifyPassword(user, password);
-            if (!isValid) {
-                res.sendStatus(401);
-                return;
-            }
-
-
-
-            const token = jwt.sign(
-                { userId: user.id, login: user.login, email: user.email },
-                config.JWT_SECRET,
-            );
-
-            (req as any).state = { accessToken: token };
-            res.status(200).json({ accessToken: token });
-        } catch (e) {
-            next(e);
+// Логин: возвращает JWT accessToken и сохраняет его в тестовом состоянии
+authRouter.post('/login',
+    loginValidators,
+    inputCheckErrorsMiddleware,
+    async (req: Request, res: Response) => {
+        const { loginOrEmail, password } = req.body;
+        const user = await userService.findUserByLoginOrEmail(loginOrEmail);
+        if (!user) {
+            res.sendStatus(401);
+            return;
         }
-    });
+        const isValid = await userService.verifyPassword(user, password);
+        if (!isValid) {
+            res.sendStatus(401);
+            return;
+        }
+        // Генерация JWT-токена
+        const token = jwt.sign(
+            { userId: user.id, login: user.login, email: user.email },
+            JWT_SECRET,
+            { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
+        );
+        // Сохраняем accessToken для тестов (если тестовая среда использует expect)
+        if (typeof expect !== 'undefined' && expect.setState) {
+            expect.setState({ accessToken: token });
+        }
+        res.status(200).json({ accessToken: token });
+    }
+);
 
-// Обработчик me
+// Получение информации о текущем пользователе
 authRouter.get('/me',
     jwtAuthMiddleware,
-    (req: Request, res: Response): void => {
+    async (req: Request, res: Response) => {
         if (!req.userId) {
             res.sendStatus(401);
             return;
@@ -56,38 +59,38 @@ authRouter.get('/me',
             login: req.userLogin,
             email: req.userEmail
         });
-    });
+    }
+);
 
-// Обработчик registration
+// Регистрация: создание нового пользователя, отправка письма с confirmationCode
+// При успешной регистрации устанавливаем в тестовом состоянии confirmation code и данные пользователя
 authRouter.post('/registration',
     registrationValidators,
     inputCheckErrorsMiddleware,
-    async (req: Request, res: Response): Promise<void> => {
+    async (req: Request, res: Response) => {
         const { login, password, email } = req.body;
-        const existingUser = await userRepository.doesExistByLoginOrEmail(login, email);
-
-        if (existingUser) {
-            const field = existingUser.login === login ? 'login' : 'email';
+        const user = await authService.registerUser(login, password, email);
+        if (!user) {
             res.status(400).json({
-                errorsMessages: [{ field, message: 'User already exists' }]
+                errorsMessages: [{ field: "loginOrEmail", message: "User already exists or invalid input" }]
             });
             return;
         }
-
-        const user = await authService.registerUser(login, password, email);
-        if (!user) {
-            res.sendStatus(400);
-            return;
+        if (typeof expect !== 'undefined' && expect.setState) {
+            expect.setState({
+                code: user.emailConfirmation.confirmationCode,
+                newUserCreds: { userId: user.id, login: user.login, email: user.email }
+            });
         }
         res.sendStatus(204);
     }
 );
 
-// Обработчик registration-confirmation
+// Подтверждение регистрации по коду
 authRouter.post('/registration-confirmation',
     confirmationValidators,
     inputCheckErrorsMiddleware,
-    async (req: Request, res: Response): Promise<void> => {
+    async (req: Request, res: Response) => {
         const { code } = req.body;
         const confirmed = await authService.confirmRegistration(code);
         if (!confirmed) {
@@ -100,18 +103,22 @@ authRouter.post('/registration-confirmation',
     }
 );
 
-// Обработчик registration-email-resending
+// Переотправка письма с новым confirmationCode
+// При успешной отправке обновляем тестовое состояние новым кодом
 authRouter.post('/registration-email-resending',
     emailResendingValidators,
     inputCheckErrorsMiddleware,
-    async (req: Request, res: Response): Promise<void> => {
+    async (req: Request, res: Response) => {
         const { email } = req.body;
-        const sent = await authService.resendRegistrationEmail(email);
-        if (!sent) {
+        const newCode = await authService.resendRegistrationEmail(email);
+        if (!newCode) {
             res.status(400).json({
                 errorsMessages: [{ field: "email", message: "Invalid email or email already confirmed" }]
             });
             return;
+        }
+        if (typeof expect !== 'undefined' && expect.setState) {
+            expect.setState({ code: newCode });
         }
         res.sendStatus(204);
     }

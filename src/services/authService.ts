@@ -1,76 +1,56 @@
-import crypto from 'crypto';
-import { UserDBType } from "../models/userModel";
+import { randomUUID } from "crypto";
+import { add } from "date-fns";
+import { EmailConfirmationType, UserDBType } from "../models/userModel";
 import { userRepository } from "../repositories/userRepository";
 import { bcryptService } from "./bcryptService";
 import { emailService } from "./emailService";
 
-
-const uuidv4 = () => crypto.randomUUID()
-
 export const authService = {
     async registerUser(login: string, password: string, email: string): Promise<UserDBType | null> {
-        // Проверяем существование пользователя
-        const existingUser = await userRepository.doesExistByLoginOrEmail(login, email);
-        if (existingUser) return null;
+        if (await userRepository.doesExistByLoginOrEmail(login, email)) return null;
 
-        // Генерируем хеш пароля
         const passwordHash = await bcryptService.generateHash(password);
+        const emailConfirmation = generateEmailConfirmation();
 
-        // Создаём объект подтверждения
-        const emailConfirmation = {
-            confirmationCode: uuidv4(), // Используем UUID вместо случайных чисел
-            expirationDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 часа
-            isConfirmed: false
-        };
-
-        // Создаём пользователя
         const newUser: UserDBType = {
-            id: uuidv4(),
+            id: Date.now().toString(),
             login,
             password: passwordHash,
             email,
             createdAt: new Date().toISOString(),
-            emailConfirmation
+            emailConfirmation,
         };
 
-        // Сохраняем пользователя
-        const created = await userRepository.create(newUser);
-
-        // Отправляем письмо
-        await emailService.sendRegistrationEmail(email, emailConfirmation.confirmationCode);
-
+        await userRepository.create(newUser);
+        await emailService.sendRegistrationEmail(newUser.email, emailConfirmation.confirmationCode);
         return newUser;
     },
 
     async confirmRegistration(code: string): Promise<boolean> {
         const user = await userRepository.findByConfirmationCode(code);
-
-        if (!user ||
-            user.emailConfirmation.isConfirmed ||
-            new Date() > user.emailConfirmation.expirationDate
-        ) {
+        if (!user || new Date() > new Date(user.emailConfirmation.expirationDate) || user.emailConfirmation.isConfirmed) {
             return false;
         }
 
-        return userRepository.updateConfirmation(user.id, { isConfirmed: true });
+        return await userRepository.updateConfirmation(user.id, { isConfirmed: true });
     },
 
-    async resendRegistrationEmail(email: string): Promise<boolean> {
+    // Изменён метод: теперь возвращает новый confirmationCode, если письмо успешно отправлено, иначе null.
+    async resendRegistrationEmail(email: string): Promise<string | null> {
         const user = await userRepository.getByEmail(email);
+        if (!user || user.emailConfirmation.isConfirmed) return null;
 
-        if (!user || user.emailConfirmation.isConfirmed) {
-            return false;
-        }
-
-        const newConfirmation = {
-            confirmationCode: uuidv4(),
-            expirationDate: new Date(Date.now() + 24 * 60 * 60 * 1000)
-        };
-
-        await userRepository.updateConfirmation(user.id, newConfirmation);
-        return emailService.sendRegistrationEmail(email, newConfirmation.confirmationCode);
-    }
-
-
+        const emailConfirmation = generateEmailConfirmation();
+        await userRepository.updateConfirmation(user.id, emailConfirmation);
+        const sent = await emailService.sendRegistrationEmail(user.email, emailConfirmation.confirmationCode);
+        return sent ? emailConfirmation.confirmationCode : null;
+    },
 };
 
+function generateEmailConfirmation(): EmailConfirmationType {
+    return {
+        confirmationCode: randomUUID(),
+        expirationDate: add(new Date(), { hours: 1, minutes: 30 }),
+        isConfirmed: false,
+    };
+}
