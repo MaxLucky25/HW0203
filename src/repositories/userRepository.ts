@@ -31,9 +31,12 @@ export const userRepository = {
         const existingUser = await this.getByLoginOrEmail(user.login) ?? await this.getByEmail(user.email);
         if (existingUser) {
             console.warn(`Пользователь уже существует: ${user.login} или ${user.email}`);
-            return {
-                errorsMessages: [{ field: existingUser.login === user.login ? 'login' : 'email', message: 'should be unique' }]
-            };
+            // Если совпадает email, возвращаем ошибку с полем "email", иначе "login"
+            if (existingUser.email === user.email) {
+                return { errorsMessages: [{ field: "email", message: "should be unique" }] };
+            } else {
+                return { errorsMessages: [{ field: "login", message: "should be unique" }] };
+            }
         }
         try {
             await userCollection.insertOne(user);
@@ -47,8 +50,8 @@ export const userRepository = {
         return this.mapToOutput(user);
     },
 
-    async updateConfirmation(userId: string, updateData: Partial<EmailConfirmationType>): Promise<boolean> {
-        console.log(`Обновление данных подтверждения для userId=${userId}:`, updateData);
+    async updateConfirmation(userIdOrEmail: string, updateData: Partial<EmailConfirmationType>): Promise<boolean> {
+        console.log(`Обновление данных подтверждения для userId=${userIdOrEmail}:`, updateData);
         const updateFields: Record<string, any> = {};
 
         if (updateData.confirmationCode !== undefined) {
@@ -61,11 +64,9 @@ export const userRepository = {
             updateFields["emailConfirmation.isConfirmed"] = updateData.isConfirmed;
         }
 
-        const result = await userCollection.updateOne(
-            { id: userId },
-            { $set: updateFields }
-        );
-        console.log(`Результат обновления для userId=${userId}:`, result);
+        const filter = { $or: [ { id: userIdOrEmail }, { email: userIdOrEmail } ] };
+        const result = await userCollection.updateOne(filter, { $set: updateFields });
+        console.log(`Результат обновления для userId=${userIdOrEmail}:`, result);
         return result.modifiedCount === 1;
     },
 
