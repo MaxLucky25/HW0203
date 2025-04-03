@@ -10,9 +10,10 @@ import {
     loginValidators,
     registrationValidators
 } from "../validators/authValidators";
+import config from "../utility/config";
 
-const JWT_SECRET = process.env.JWT_SECRET || 'default_secret';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
+const JWT_SECRET = config.JWT_SECRET;
+const JWT_EXPIRES_IN = config.JWT_EXPIRES_IN;
 
 export const authRouter = Router();
 

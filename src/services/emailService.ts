@@ -1,7 +1,6 @@
 import nodemailer from 'nodemailer';
 import config from "../utility/config";
 
-
 const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -13,17 +12,12 @@ const transporter = nodemailer.createTransport({
 export const emailService = {
     async sendEmail(to: string, subject: string, text: string, html?: string): Promise<boolean> {
         try {
-            const info = await transporter.sendMail({
-                from: config.EMAIL_USER,
-                to,
-                subject,
-                text,
-                html
-            });
-            console.log('Email sent:', info.messageId);
+            console.log(`Попытка отправки письма на ${to} с темой "${subject}"`);
+            await transporter.sendMail({ from: config.EMAIL_USER, to, subject, text, html });
+            console.log(`Письмо успешно отправлено на ${to}`);
             return true;
         } catch (error) {
-            console.error('Email sending failed:', error);
+            console.error("Ошибка при отправке письма:", error);
             return false;
         }
     },

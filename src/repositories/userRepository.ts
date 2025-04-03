@@ -1,76 +1,54 @@
-import {CreateUserDto, EmailConfirmationType, UserDBType, UserViewModel} from "../models/userModel";
-import {userCollection} from "../db/mongo-db";
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-import {emailService} from "../services/emailService";
-
-
-const SALT_ROUNDS = 10;
+import { CreateUserDto, EmailConfirmationType, UserDBType, UserViewModel } from "../models/userModel";
+import { userCollection } from "../db/mongo-db";
+import { emailService } from "../services/emailService";
 
 export const userRepository = {
 
     async getByLogin(login: string): Promise<UserDBType | null> {
+        console.log(`Поиск пользователя по login: ${login}`);
         return await userCollection.findOne({ login }, { projection: { _id: 0 } });
     },
 
     async getByEmail(email: string): Promise<UserDBType | null> {
+        console.log(`Поиск пользователя по email: ${email}`);
         return await userCollection.findOne({ email }, { projection: { _id: 0 } });
     },
 
     async getByLoginOrEmail(loginOrEmail: string): Promise<UserDBType | null> {
+        console.log(`Поиск пользователя по login или email: ${loginOrEmail}`);
         return (await this.getByLogin(loginOrEmail)) ?? (await this.getByEmail(loginOrEmail));
     },
 
-    // Метод для проверки существования пользователя
     async doesExistByLoginOrEmail(login: string, email: string): Promise<UserDBType | null> {
-        return await userCollection.findOne({
-            $or: [
-                { login },
-                { email }
-            ]
-        });
+        const byLogin = await this.getByLogin(login);
+        if (byLogin) return byLogin;
+        const byEmail = await this.getByEmail(email);
+        return byEmail;
     },
 
-
-    async create(input: CreateUserDto): Promise<UserViewModel | { errorsMessages: { field: string; message: string }[] }> {
-        const existingUser = await this.doesExistByLoginOrEmail(input.login, input.email);
+    async create(user: UserDBType): Promise<UserViewModel | { errorsMessages: { field: string; message: string }[] }> {
+        console.log(`Создание пользователя: login=${user.login}, email=${user.email}`);
+        const existingUser = await this.getByLoginOrEmail(user.login) ?? await this.getByEmail(user.email);
         if (existingUser) {
-            const field = existingUser.login === input.login ? 'login' : 'email';
+            console.warn(`Пользователь уже существует: ${user.login} или ${user.email}`);
             return {
-                errorsMessages: [{ field, message: 'User already exists' }]
+                errorsMessages: [{ field: existingUser.login === user.login ? 'login' : 'email', message: 'should be unique' }]
             };
         }
-        // Хеширование пароля
-        const hashedPassword = await bcrypt.hash(input.password, SALT_ROUNDS);
-        // Создание нового пользователя с подтверждением email
-        const newUser: UserDBType = {
-            id: crypto.randomUUID(),
-            login: input.login,
-            email: input.email,
-            password: hashedPassword,
-            createdAt: new Date().toISOString(),
-            emailConfirmation: {
-                confirmationCode: crypto.randomUUID(),
-                expirationDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 часа
-                isConfirmed: false
-            }
-        };
-
-        // Вставка нового пользователя в базу данных
-        await userCollection.insertOne(newUser);
-
-        // Отправка email с кодом подтверждения
-        await emailService.sendEmail(
-            input.email,
-            'Подтверждение регистрации',
-            `Ваш код подтверждения: ${newUser.emailConfirmation.confirmationCode}`,
-            `<p>Ваш код подтверждения: <b>${newUser.emailConfirmation.confirmationCode}</b></p>`
-        );
-        // Возвращаем результат с преобразованными данными пользователя
-        return this.mapToOutput(newUser);
+        try {
+            await userCollection.insertOne(user);
+            console.log(`Пользователь ${user.login} успешно добавлен в БД`);
+        } catch (error) {
+            console.error(`Ошибка вставки пользователя ${user.login} в БД:`, error);
+            throw error;
+        }
+        // Отправляем письмо с подтверждением (можно и здесь, или вызывать выше)
+        await emailService.sendRegistrationEmail(user.email, user.emailConfirmation.confirmationCode);
+        return this.mapToOutput(user);
     },
 
     async updateConfirmation(userId: string, updateData: Partial<EmailConfirmationType>): Promise<boolean> {
+        console.log(`Обновление данных подтверждения для userId=${userId}:`, updateData);
         const updateFields: Record<string, any> = {};
 
         if (updateData.confirmationCode !== undefined) {
@@ -87,33 +65,31 @@ export const userRepository = {
             { id: userId },
             { $set: updateFields }
         );
-
+        console.log(`Результат обновления для userId=${userId}:`, result);
         return result.modifiedCount === 1;
     },
 
-
-
     async findByConfirmationCode(code: string): Promise<UserDBType | null> {
-        return userCollection.findOne({
-            "emailConfirmation.confirmationCode": code
-        });
+        console.log(`Поиск пользователя по confirmationCode: ${code}`);
+        return await userCollection.findOne({ "emailConfirmation.confirmationCode": code }, { projection: { _id: 0 } });
     },
 
     async findByLoginOrEmail(loginOrEmail: string): Promise<UserDBType | null> {
+        console.log(`Поиск пользователя по login или email: ${loginOrEmail}`);
         const byLogin = await this.getByLogin(loginOrEmail);
         if (byLogin) return byLogin;
         return await this.getByEmail(loginOrEmail);
     },
 
     async delete(id: string): Promise<boolean> {
-        const result = await userCollection.deleteOne({id:id});
+        console.log(`Удаление пользователя с id: ${id}`);
+        const result = await userCollection.deleteOne({ id: id });
+        console.log(`Результат удаления для userId=${id}:`, result);
         return result.deletedCount === 1;
     },
 
     mapToOutput(user: UserDBType): UserViewModel {
-        const { _id,password, ...rest } = user;
+        const { _id, password, ...rest } = user;
         return rest;
     }
-
 };
-
