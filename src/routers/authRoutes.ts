@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { jwtAuthMiddleware } from "../middlewares/jwtAuthMiddleware";
 import {confirmationValidators, emailResendingValidators, loginValidators, registrationValidators} from "../validators/authValidators";
 import {authService} from "../services/authService";
+import {userRepository} from "../repositories/userRepository";
 
 
 const JWT_SECRET= process.env.JWT_SECRET || 'default_secret';
@@ -59,14 +60,21 @@ authRouter.post('/registration',
     inputCheckErrorsMiddleware,
     async (req: Request, res: Response) => {
         const { login, password, email } = req.body;
-        const user = await authService.registerUser(login, password, email);
-        if (!user) {
+        const existingUser = await userRepository.doesExistByLoginOrEmail(login, email);
+
+        if (existingUser) {
+            const field = existingUser.login === login ? 'login' : 'email';
             res.status(400).json({
-                errorsMessages: [{ field: "loginOrEmail", message: "User already exists or invalid input" }]
+                errorsMessages: [{ field, message: 'User already exists' }]
             });
             return;
         }
-        // Согласно спецификации возвращаем 204
+
+        const user = await authService.registerUser(login, password, email);
+        if (!user) {
+            res.sendStatus(400);
+            return;
+        }
         res.sendStatus(204);
     }
 );

@@ -43,9 +43,13 @@ export const authService = {
         if (!user || user.emailConfirmation.isConfirmed) return false;
 
         const emailConfirmation = generateEmailConfirmation();
-        await userRepository.updateConfirmation(user.id, emailConfirmation);
-        return await emailService.sendRegistrationEmail(user.email, emailConfirmation.confirmationCode);
-    },
+        const updated = await userRepository.updateConfirmation(user.id, emailConfirmation);
+
+        return updated && await emailService.sendRegistrationEmail(
+            user.email,
+            emailConfirmation.confirmationCode
+        );
+    }
 
 
 };

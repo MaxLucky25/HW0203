@@ -10,13 +10,17 @@ export const commentService = {
         // Проверяем, существует ли пост
         const post = await postRepository.getById(postId);
         if (!post) return null;
-        const comment = await commentRepository.create(postId, input, commentatorInfo);
+
+        const newComment = await commentRepository.create(postId, input, commentatorInfo);
         return {
-            id: comment.id,
-            content: comment.content,
-            commentatorInfo: comment.commentatorInfo,
-            createdAt: comment.createdAt,
-        }
+            id: newComment.id,
+            content: newComment.content,
+            commentatorInfo: {
+                userId: commentatorInfo.userId,
+                userLogin: commentatorInfo.userLogin
+            },
+            createdAt: newComment.createdAt
+        };
     },
 
     async updateComment(commentId: string,
@@ -57,14 +61,16 @@ export const commentService = {
 
     },
 
-    async deleteComment(commentId: string, userId: string): Promise<{ status: number, error?: string }> {
+    async deleteComment(commentId: string, userId: string): Promise<{ status: number }> {
         const comment = await commentRepository.getCommentById(commentId);
-        if (!comment)
-            return { status: 404, error: 'Comment not found' };
-        if (comment.commentatorInfo.userId !== userId)
-            return { status: 403, error: 'Forbidden' };
+        if (!comment) return { status: 404 };
+
+        if (comment.commentatorInfo.userId !== userId) {
+            return { status: 403 };
+        }
+
         const deleted = await commentRepository.delete(commentId);
-        return deleted ? { status: 204 } : { status: 400, error: 'Delete failed' };
+        return deleted ? { status: 204 } : { status: 404 };
     },
 
     async getCommentById(commentId: string) {

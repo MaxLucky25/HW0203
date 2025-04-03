@@ -21,20 +21,23 @@ export const userRepository = {
         return (await this.getByLogin(loginOrEmail)) ?? (await this.getByEmail(loginOrEmail));
     },
 
+    // Метод для проверки существования пользователя
     async doesExistByLoginOrEmail(login: string, email: string): Promise<UserDBType | null> {
-        const byLogin = await this.getByLogin(login);
-        if (byLogin) return byLogin;
-        const byEmail = await this.getByEmail(email);
-        return byEmail;
+        return await userCollection.findOne({
+            $or: [
+                { login },
+                { email }
+            ]
+        });
     },
 
 
     async create(input: CreateUserDto): Promise<UserViewModel | { errorsMessages: { field: string; message: string }[] }> {
-        // Проверка существующих пользователей по логину или email
-        const existingUser = await this.getByLoginOrEmail(input.login) ?? await this.getByEmail(input.email);
+        const existingUser = await this.doesExistByLoginOrEmail(input.login, input.email);
         if (existingUser) {
+            const field = existingUser.login === input.login ? 'login' : 'email';
             return {
-                errorsMessages: [{ field: existingUser.login === input.login ? 'login' : 'email', message: 'should be unique' }]
+                errorsMessages: [{ field, message: 'User already exists' }]
             };
         }
         // Хеширование пароля
