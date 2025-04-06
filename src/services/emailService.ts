@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
 import config from "../utility/config";
 
+
+
 const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -24,8 +26,14 @@ export const emailService = {
 
     async sendRegistrationEmail(email: string, confirmationCode: string): Promise<boolean> {
         const subject = "Подтверждение регистрации";
-        const text = `Ваш код подтверждения: ${confirmationCode}`;
-        const html = `<p>Ваш код подтверждения: <b>${confirmationCode}</b></p>`;
+        const text = `Your confirmation code: ${confirmationCode}`;
+        const html = `
+      <h1>Thanks for your registration</h1>
+      <p>To finish registration please follow the link below:
+          <a href='https://somesite.com/confirm-email?code=${confirmationCode}'>complete registration</a>
+      </p>
+    `;
         return await this.sendEmail(email, subject, text, html);
     }
+
 };
