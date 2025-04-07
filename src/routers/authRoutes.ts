@@ -118,9 +118,9 @@ authRouter.post('/registration-email-resending',
             });
             return;
         }
-        if (typeof expect !== 'undefined' && expect.setState) {
-            expect.setState({ code: newCode });
-        }
-        res.sendStatus(204);
+        // if (typeof expect !== 'undefined' && expect.setState) {
+        //     expect.setState({ code: newCode });
+        // }
+        // res.sendStatus(204);
     }
 );

@@ -7,14 +7,11 @@ import { emailService } from "./emailService";
 
 export const authService = {
     async registerUser(login: string, password: string, email: string): Promise<UserDBType | null> {
-        console.log(`Регистрация пользователя: login=${login}, email=${email}`);
         if (await userRepository.doesExistByLoginOrEmail(login, email)) {
-            console.warn(`Пользователь с login=${login} или email=${email} уже существует`);
             return null;
         }
         const passwordHash = await bcryptService.generateHash(password);
         const emailConfirmation = generateEmailConfirmation();
-        console.log(`Сгенерирован confirmationCode: ${emailConfirmation.confirmationCode}`);
 
         const newUser: UserDBType = {
             id: Date.now().toString(),
@@ -63,32 +60,20 @@ export const authService = {
     },
 
     async resendRegistrationEmail(email: string): Promise<string | null> {
-        console.log(`Повторная отправка письма на ${email}`);
         const user = await userRepository.getByEmail(email);
-        if (!user) {
-            console.warn(`Пользователь с email ${email} не найден`);
+
+        if (!user || user.emailConfirmation.isConfirmed) {
             return null;
         }
-        if (user.emailConfirmation.isConfirmed) {
-            console.log(`Пользователь с email ${email} уже подтверждён. Повторная отправка не требуется.`);
-            return user.emailConfirmation.confirmationCode;
-        }
+
         const emailConfirmation = generateEmailConfirmation();
-        console.log(`Сгенерирован новый confirmationCode: ${emailConfirmation.confirmationCode} для ${user.login}`);
-        const updateResult = await userRepository.updateConfirmation(user.id, emailConfirmation);
-        if (!updateResult) {
-            console.error(`Не удалось обновить confirmationCode для пользователя ${user.login}`);
-            return null;
-        }
-        const sent = await emailService.sendRegistrationEmail(user.email, emailConfirmation.confirmationCode);
-        if (sent) {
-            console.log(`Письмо повторно отправлено на ${user.email}`);
-            return emailConfirmation.confirmationCode;
-        } else {
-            console.error(`Не удалось отправить письмо на ${user.email}`);
-            return null;
-        }
-    },
+        const updateResult = await userRepository.updateConfirmation(
+            user.id,
+            emailConfirmation
+        );
+
+        return updateResult ? emailConfirmation.confirmationCode : null;
+    }
 };
 
 function generateEmailConfirmation(): EmailConfirmationType {
