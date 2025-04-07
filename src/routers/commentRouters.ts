@@ -3,13 +3,11 @@ import { jwtAuthMiddleware } from '../middlewares/jwtAuthMiddleware';
 import { inputCheckErrorsMiddleware } from '../middlewares/validationMiddleware';
 import { commentService } from '../services/commentService';
 import { commentValidators } from '../validators/commentValidators';
-
-
-
+import { ResultStatus } from '../models/resultModels';
 
 export const commentRouter = Router();
 
-//обновление комментария
+// Обновление комментария
 commentRouter.put('/:commentId',
     jwtAuthMiddleware,
     commentValidators,
@@ -17,42 +15,38 @@ commentRouter.put('/:commentId',
     async (req: Request, res: Response) => {
         const { commentId } = req.params;
         const userId = req.userId!;
-        const updatedComment = await commentService.updateComment(commentId, { content: req.body.content }, userId);
+        const result = await commentService.updateComment(commentId, { content: req.body.content }, userId);
 
-        if (updatedComment) {
-            res.sendStatus(204); // Комментарий обновлен, без контента в ответе
+        if (result.status === ResultStatus.Success) {
+            res.sendStatus(204); // Успешно обновлено
+        } else if (result.status === ResultStatus.Forbidden) {
+            res.sendStatus(403); // Нет прав
         } else {
-            res.sendStatus(404); // Комментарий не найден
+            res.sendStatus(404); // Не найден
         }
     }
 );
 
-//удаление комментария
+// Удаление комментария
 commentRouter.delete('/:commentId',
     jwtAuthMiddleware,
     async (req: Request, res: Response) => {
         const { commentId } = req.params;
         const userId = req.userId!;
 
-        const deleted = await commentService.deleteComment(commentId, userId);
-
-        if (deleted) {
-            res.sendStatus(204); // Комментарий удален, без контента в ответе
-        } else {
-            // Проверка прав доступа, если удаление не удалось из-за отсутствия прав
-            const isAuthor = await commentService.getCommentsByPostId(commentId, userId); // Допустим, есть метод для проверки, является ли пользователь автором
-            if (isAuthor) {
-                res.sendStatus(404); // Комментарий не найден
-            } else {
-                res.sendStatus(403); // Пользователь не авторизован для удаления
-            }
-        }
+        const result = await commentService.deleteComment(commentId, userId);
+        res.sendStatus(result.status); // 204, 403 или 404 в зависимости от ситуации
     }
 );
 
-// получение комментария по id
+// Получение комментария по id
 commentRouter.get('/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     const comment = await commentService.getCommentById(id);
-    comment ? res.status(200).json(comment) : res.sendStatus(404);
+
+    if (comment) {
+        res.status(200).json(comment);
+    } else {
+        res.sendStatus(404);
+    }
 });
