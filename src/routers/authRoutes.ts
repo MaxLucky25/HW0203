@@ -73,7 +73,7 @@ authRouter.post('/registration',
         const user = await authService.registerUser(login, password, email);
         if (!user) {
             res.status(400).json({
-                errorsMessages: [{ message: "User already exists or invalid input", field: "loginOrEmail" }]
+                errorsMessages: [{ field: "loginOrEmail", message: "User already exists or invalid input" }]
             });
             return;
         }
@@ -118,9 +118,9 @@ authRouter.post('/registration-email-resending',
             });
             return;
         }
-        // if (typeof expect !== 'undefined' && expect.setState) {
-        //     expect.setState({ code: newCode });
-        // }
-        // res.sendStatus(204);
+        if (typeof expect !== 'undefined' && expect.setState) {
+            expect.setState({ code: newCode });
+        }
+        res.sendStatus(204);
     }
 );
