@@ -39,10 +39,10 @@ authRouter.post('/login',
             JWT_SECRET,
             { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
         );
-        // Сохраняем accessToken для тестов (если тестовая среда использует expect)
-        if (typeof expect !== 'undefined' && expect.setState) {
-            expect.setState({ accessToken: token });
-        }
+        // // Сохраняем accessToken для тестов (если тестовая среда использует expect)
+        // if (typeof expect !== 'undefined' && expect.setState) {
+        //     expect.setState({ accessToken: token });
+        // }
         res.status(200).json({ accessToken: token });
     }
 );
@@ -77,12 +77,12 @@ authRouter.post('/registration',
             });
             return;
         }
-        if (typeof expect !== 'undefined' && expect.setState) {
-            expect.setState({
-                code: user.emailConfirmation.confirmationCode,
-                newUserCreds: { userId: user.id, login: user.login, email: user.email }
-            });
-        }
+        // if (typeof expect !== 'undefined' && expect.setState) {
+        //     expect.setState({
+        //         code: user.emailConfirmation.confirmationCode,
+        //         newUserCreds: { userId: user.id, login: user.login, email: user.email }
+        //     });
+        // }
         res.sendStatus(204);
     }
 );
@@ -118,9 +118,9 @@ authRouter.post('/registration-email-resending',
             });
             return;
         }
-        if (typeof expect !== 'undefined' && expect.setState) {
-            expect.setState({ code: newCode });
-        }
+        // if (typeof expect !== 'undefined' && expect.setState) {
+        //     expect.setState({ code: newCode });
+        // }
         res.sendStatus(204);
     }
 );
