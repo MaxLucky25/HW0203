@@ -72,9 +72,7 @@ authRouter.post('/registration',
         const { login, password, email } = req.body;
         const user = await authService.registerUser(login, password, email);
         if (!user) {
-            res.status(400).json({
-                errorsMessages: [{ field: "loginOrEmail", message: "User already exists or invalid input" }]
-            });
+            res.status(400);
             return;
         }
         if (typeof expect !== 'undefined' && expect.setState) {
