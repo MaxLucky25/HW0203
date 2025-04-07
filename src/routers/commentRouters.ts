@@ -3,8 +3,7 @@ import { jwtAuthMiddleware } from '../middlewares/jwtAuthMiddleware';
 import { inputCheckErrorsMiddleware } from '../middlewares/validationMiddleware';
 import { commentService } from '../services/commentService';
 import { commentValidators } from '../validators/commentValidators';
-import {ResultStatus} from "../models/resultModels";
-import {resultCodeToHttpStatus} from "../utility/resultMapper";
+
 
 
 
@@ -18,14 +17,13 @@ commentRouter.put('/:commentId',
     async (req: Request, res: Response) => {
         const { commentId } = req.params;
         const userId = req.userId!;
-        const result = await commentService.updateComment(commentId, { content: req.body.content }, userId);
+        const updatedComment = await commentService.updateComment(commentId, { content: req.body.content }, userId);
 
-        if (result.status !== ResultStatus.Success) {
-            res.status(resultCodeToHttpStatus(result.status)).json(result.extensions);
-            return;
+        if (updatedComment) {
+            res.sendStatus(204); // Комментарий обновлен, без контента в ответе
+        } else {
+            res.sendStatus(404); // Комментарий не найден
         }
-
-        res.sendStatus(204);
     }
 );
 
@@ -35,15 +33,19 @@ commentRouter.delete('/:commentId',
     async (req: Request, res: Response) => {
         const { commentId } = req.params;
         const userId = req.userId!;
-        const result = await commentService.deleteComment(commentId, userId);
-        if (result.status === 204) {
-            res.sendStatus(204);
-        } else if (result.status === 403) {
-            res.sendStatus(403);
-        } else if (result.status === 404) {
-            res.sendStatus(404);
+
+        const deleted = await commentService.deleteComment(commentId, userId);
+
+        if (deleted) {
+            res.sendStatus(204); // Комментарий удален, без контента в ответе
         } else {
-            res.sendStatus(400);
+            // Проверка прав доступа, если удаление не удалось из-за отсутствия прав
+            const isAuthor = await commentService.getCommentsByPostId(commentId, userId); // Допустим, есть метод для проверки, является ли пользователь автором
+            if (isAuthor) {
+                res.sendStatus(404); // Комментарий не найден
+            } else {
+                res.sendStatus(403); // Пользователь не авторизован для удаления
+            }
         }
     }
 );
