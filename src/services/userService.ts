@@ -35,12 +35,24 @@ export const userService = {
         return await userRepository.delete(id);
     },
 
-    async findUserByLoginOrEmail(loginOrEmail: string) {
-        return await userRepository.getByLoginOrEmail(loginOrEmail);
-    },
+    async createUserByAdmin(input: CreateUserDto): Promise<UserViewModel | { errorsMessages: { field: string; message: string }[] }> {
+        const passwordHash = await bcrypt.hash(input.password, 10);
 
-    // проверка пароля
-    async verifyPassword(user: UserDBType, password: string): Promise<boolean> {
-        return await bcrypt.compare(password, user.password);
+        const newUser: UserDBType = {
+            id: Date.now().toString(),
+            login: input.login,
+            email: input.email,
+            password: passwordHash,
+            createdAt: new Date().toISOString(),
+            emailConfirmation: {
+                confirmationCode: randomUUID(),
+                expirationDate: new Date(), // не важно
+                isConfirmed: true, // <--- важно
+            },
+        };
+
+        return await userRepository.create(newUser);
     }
+
+
 };

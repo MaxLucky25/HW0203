@@ -19,7 +19,7 @@ userRouter.post('/',
     userValidators,
     inputCheckErrorsMiddleware,
     async (req: Request, res: Response) => {
-        const result = await userService.createUser(req.body);
+        const result = await userService.createUserByAdmin(req.body);
         if ('errorsMessages' in result) {
             res.status(400).json(result);
         } else {
