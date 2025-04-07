@@ -1,97 +1,72 @@
+import jwt from 'jsonwebtoken';
 import { randomUUID } from "crypto";
 import { add } from "date-fns";
-import { EmailConfirmationType, UserDBType } from "../models/userModel";
-import { userRepository } from "../repositories/userRepository";
 import { bcryptService } from "./bcryptService";
+import { userRepository } from "../repositories/userRepository";
 import { emailService } from "./emailService";
+import config from "../utility/config";
+
 
 export const authService = {
-    async registerUser(login: string, password: string, email: string): Promise<UserDBType | null> {
-        console.log(`Регистрация пользователя: login=${login}, email=${email}`);
-        if (await userRepository.doesExistByLoginOrEmail(login, email)) {
-            console.warn(`Пользователь с login=${login} или email=${email} уже существует`);
-            return null;
-        }
-        const passwordHash = await bcryptService.generateHash(password);
-        const emailConfirmation = generateEmailConfirmation();
-        console.log(`Сгенерирован confirmationCode: ${emailConfirmation.confirmationCode}`);
+    async login(loginOrEmail: string, password: string): Promise<{ accessToken: string } | null> {
+        const user = await userRepository.getByLoginOrEmail(loginOrEmail);
+        if (!user || !user.emailConfirmation.isConfirmed) return null;
 
-        const newUser: UserDBType = {
+        const isValid = await bcryptService.compareHash(password, user.password);
+        if (!isValid) return null;
+
+        const accessToken = jwt.sign(
+            { userId: user.id, login: user.login, email: user.email },
+            config.JWT_SECRET,
+            { expiresIn: config.JWT_EXPIRES_IN } as jwt.SignOptions
+        );
+
+        return { accessToken };
+    },
+
+    async register(login: string, password: string, email: string): Promise<{ userId: string, confirmationCode: string } | null> {
+        if (await userRepository.doesExistByLoginOrEmail(login, email)) return null;
+
+        const passwordHash = await bcryptService.generateHash(password);
+        const confirmation = generateConfirmation();
+        const newUser = {
             id: Date.now().toString(),
             login,
             password: passwordHash,
             email,
             createdAt: new Date().toISOString(),
-            emailConfirmation,
+            emailConfirmation: confirmation,
         };
 
-        try {
-            await userRepository.create(newUser);
-            console.log(`Пользователь ${login} успешно создан`);
-        } catch (error) {
-            console.error(`Ошибка при создании пользователя ${login}:`, error);
-            return null;
-        }
+        await userRepository.create(newUser);
+        await emailService.sendRegistrationEmail(email, confirmation.confirmationCode);
 
-        const emailSent = await emailService.sendRegistrationEmail(newUser.email, emailConfirmation.confirmationCode);
-        if (emailSent) {
-            console.log(`Письмо с подтверждением отправлено на ${newUser.email}`);
-        } else {
-            console.error(`Не удалось отправить письмо на ${newUser.email}`);
-        }
-        return newUser;
+        return { userId: newUser.id, confirmationCode: confirmation.confirmationCode };
     },
 
-    async confirmRegistration(code: string): Promise<boolean> {
-        console.log(`Подтверждение регистрации с кодом: ${code}`);
+    async confirm(code: string): Promise<boolean> {
         const user = await userRepository.findByConfirmationCode(code);
-        if (!user) {
-            console.warn(`Пользователь с кодом ${code} не найден`);
+        if (!user || user.emailConfirmation.isConfirmed || user.emailConfirmation.expirationDate < new Date()) {
             return false;
         }
-        if (new Date() > new Date(user.emailConfirmation.expirationDate)) {
-            console.warn(`Код ${code} просрочен`);
-            return false;
-        }
-        if (user.emailConfirmation.isConfirmed) {
-            console.warn(`Пользователь с кодом ${code} уже подтверждён`);
-            return false;
-        }
-        const updateResult = await userRepository.updateConfirmation(user.id, { isConfirmed: true });
-        console.log(`Обновление подтверждения для ${user.login}: ${updateResult}`);
-        return updateResult;
+
+        return await userRepository.updateConfirmation(user.id, { isConfirmed: true });
     },
 
-    async resendRegistrationEmail(email: string): Promise<string | null> {
-        console.log(`Повторная отправка письма на ${email}`);
+    async resendEmail(email: string): Promise<string | null> {
         const user = await userRepository.getByEmail(email);
-        if (!user) {
-            console.warn(`Пользователь с email ${email} не найден`);
-            return null;
-        }
-        if (user.emailConfirmation.isConfirmed) {
-            console.log(`Пользователь с email ${email} уже подтверждён. Повторная отправка не требуется.`);
-            return user.emailConfirmation.confirmationCode;
-        }
-        const emailConfirmation = generateEmailConfirmation();
-        console.log(`Сгенерирован новый confirmationCode: ${emailConfirmation.confirmationCode} для ${user.login}`);
-        const updateResult = await userRepository.updateConfirmation(user.id, emailConfirmation);
-        if (!updateResult) {
-            console.error(`Не удалось обновить confirmationCode для пользователя ${user.login}`);
-            return null;
-        }
-        const sent = await emailService.sendRegistrationEmail(user.email, emailConfirmation.confirmationCode);
-        if (sent) {
-            console.log(`Письмо повторно отправлено на ${user.email}`);
-            return emailConfirmation.confirmationCode;
-        } else {
-            console.error(`Не удалось отправить письмо на ${user.email}`);
-            return null;
-        }
-    },
+        if (!user || user.emailConfirmation.isConfirmed) return null;
+
+        const newConfirmation = generateConfirmation();
+        const updated = await userRepository.updateConfirmation(user.id, newConfirmation);
+        if (!updated) return null;
+
+        const sent = await emailService.sendRegistrationEmail(email, newConfirmation.confirmationCode);
+        return sent ? newConfirmation.confirmationCode : null;
+    }
 };
 
-function generateEmailConfirmation(): EmailConfirmationType {
+function generateConfirmation() {
     return {
         confirmationCode: randomUUID(),
         expirationDate: add(new Date(), { hours: 1, minutes: 30 }),
