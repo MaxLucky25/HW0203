@@ -43,21 +43,8 @@ export const userRepository = {
     },
 
     async create(user: UserDBType): Promise<UserViewModel | { errorsMessages: { field: string; message: string }[] }> {
-        const existingUser = await this.getByLoginOrEmail(user.login) ?? await this.getByEmail(user.email);
-        if (existingUser) {
-            // Если совпадает email, возвращаем ошибку с полем "email", иначе "login"
-            if (existingUser.email === user.email) {
-                return { errorsMessages: [{ field: "email", message: "should be unique" }] };
-            } else {
-                return { errorsMessages: [{ field: "login", message: "should be unique" }] };
-            }
-        }
-        try {
             await userCollection.insertOne(user);
-        } catch (error) {
-            throw error;
-        }
-        // Отправляем письмо с подтверждением (можно и здесь, или вызывать выше)
+        // Отправляем письмо с подтверждением
         if (!user.emailConfirmation.isConfirmed) {
             await emailService.sendRegistrationEmail(user.email, user.emailConfirmation.confirmationCode);
         }

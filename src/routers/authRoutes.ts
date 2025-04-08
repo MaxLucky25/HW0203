@@ -8,6 +8,7 @@ import {
     registrationValidators
 } from "../validators/authValidators";
 import { authService } from "../services/authService";
+import {userRepository} from "../repositories/userRepository";
 
 export const authRouter = Router();
 
@@ -43,8 +44,13 @@ authRouter.post('/registration',
     inputCheckErrorsMiddleware,
     async (req: Request, res: Response) => {
         const { login, password, email } = req.body;
-        const result = await authService.register(login, password, email);
 
+        const existingByLogin = await userRepository.getByLogin(login);
+        if(!existingByLogin) {
+            res.sendStatus(400).json(existingByLogin);
+        }
+
+        const result = await authService.register(login, password, email);
         if (!result) {
             res.status(400);
             return;
