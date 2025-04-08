@@ -1,56 +1,44 @@
 import { Request, Response, NextFunction } from 'express';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 
-
-// Загружаем переменные окружения из .env файла
+// Загружаем переменные окружения из .env
 dotenv.config();
 
+// Достаём логин и пароль из переменных окружения
+const ADMIN_LOGIN = process.env.ADMIN_LOGIN;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
-// Созадём прослойку для авторизации
 export const authMiddleware = (
     req: Request,
     res: Response,
     next: NextFunction
 ): void => {
-    // Проверяем, что переменная окружения установлена
-    if (!process.env.ADMIN_AUTH) {
-        console.error('ADMIN_AUTH is not set in .env file');
-        res.sendStatus(500);
-        return;
-    }
-    // Проверяем формат ADMIN_AUTH
-    const adminAuthParts = process.env.ADMIN_AUTH.split(':');
-    if (adminAuthParts.length !== 2 || !adminAuthParts[0] || !adminAuthParts[1]) {
-        console.error('Invalid ADMIN_AUTH format in .env. Expected "login:password"');
-        res.sendStatus(500);
-        return;
-    }
+    // Получаем заголовок авторизации
+    const authHeader = req.headers.authorization;
 
-    const [adminLogin, adminPassword] = adminAuthParts;
-
-    // объявляем условия типы входящих данных
-    const authHeader = req.headers.authorization || req.headers['authorization'];
-
-    //  Проверка если не строка или авторизационный заголовок не зашифровон с помощью basic отправляем 401 статус
+    // Проверяем, что заголовок есть и начинается с 'Basic '
     if (typeof authHeader !== 'string' || !authHeader.startsWith('Basic ')) {
-        res.sendStatus(401);
+        res.sendStatus(401); // Unauthorized
         return;
     }
 
     try {
-        // делим пришедшую сроку по пробелу и берем вторую часть
-        const base64 = authHeader.split(' ')[1];
-        // далее декодируем полученное значение из переменной (в ней должно быть значение пароля)
-        const credentials = Buffer.from(base64, 'base64').toString('utf-8');
-        // разделяем полученную строку на логин и пароль
-        const [login, password] = credentials.split(':');
-        // проверяем значение авторазации
-        if (login === adminLogin && password === adminPassword) {
-            next();
+        // Извлекаем base64-строку (вторую часть после 'Basic ')
+        const base64Credentials = authHeader.split(' ')[1];
+
+        // Декодируем base64 в строку формата "логин:пароль"
+        const decodedCredentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
+
+        // Разбиваем строку на логин и пароль
+        const [login, password] = decodedCredentials.split(':');
+
+        // Проверяем логин и пароль по отдельности
+        if (login === ADMIN_LOGIN && password === ADMIN_PASSWORD) {
+            next(); // Доступ разрешён — идём дальше
         } else {
-            res.sendStatus(401);
+            res.sendStatus(401); // Неверные логин или пароль
         }
-    } catch (e) {
-        res.sendStatus(401);
+    } catch (error) {
+        res.sendStatus(401); // Ошибка при обработке — считаем запрос неавторизованным
     }
 };
