@@ -13,18 +13,7 @@ export const commentService = {
         if (!post) return null;
 
         // Создаём комментарий
-        const newComment = await commentRepository.create(postId, input, commentatorInfo);
-
-        // Возвращаем в правильном формате
-        return {
-            id: newComment.id,
-            content: newComment.content,
-            commentatorInfo: {
-                userId: commentatorInfo.userId,
-                userLogin: commentatorInfo.userLogin
-            },
-            createdAt: newComment.createdAt
-        };
+        return await commentRepository.create(postId, input, commentatorInfo);
     },
 
     async updateComment(commentId: string, input: UpdateCommentDto): Promise<boolean> {

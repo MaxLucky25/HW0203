@@ -15,18 +15,15 @@ commentRouter.put('/:commentId',
     async (req: Request, res: Response) => {
         const { commentId } = req.params;
         const userId = req.userId!;
-
         const comment = await commentService.getCommentById(commentId);
         if (!comment) {
             res.sendStatus(404);
             return;
         }
-
         if (comment.commentatorInfo.userId !== userId) {
             res.sendStatus(403);
             return;
         }
-
         const updated = await commentService.updateComment(commentId, { content: req.body.content });
         updated ? res.sendStatus(204) : res.sendStatus(400);
     }
@@ -37,18 +34,15 @@ commentRouter.delete('/:commentId',
     async (req: Request, res: Response) => {
         const { commentId } = req.params;
         const userId = req.userId!;
-
         const comment = await commentService.getCommentById(commentId);
         if (!comment) {
             res.sendStatus(404);
             return;
         }
-
         if (comment.commentatorInfo.userId !== userId) {
             res.sendStatus(403);
             return;
         }
-
         const deleted = await commentService.deleteComment(commentId);
         deleted ? res.sendStatus(204) : res.sendStatus(404);
     }
@@ -58,7 +52,6 @@ commentRouter.delete('/:commentId',
 commentRouter.get('/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     const comment = await commentService.getCommentById(id);
-
     if (comment) {
         res.status(200).json(comment);
     } else {
