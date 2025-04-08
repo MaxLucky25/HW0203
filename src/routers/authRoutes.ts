@@ -47,7 +47,7 @@ authRouter.post('/registration',
 
         const result = await authService.register(login, password, email);
         if (!result) {
-            res.status(400);
+            res.status(400).json(result);
             return;
         }
         res.sendStatus(204);
