@@ -29,7 +29,6 @@ export const commentService = {
     },
 
     async getCommentsByPostId(postId: string, query: any) {
-        // При желании можно проверить существование поста
         const post = await postRepository.getById(postId);
         if (!post) return null;
         return await commentRepository.getCommentsByPostId(postId, query);

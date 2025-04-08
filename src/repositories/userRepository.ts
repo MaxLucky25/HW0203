@@ -1,6 +1,7 @@
-import {EmailConfirmationType, UserDBType, UserViewModel } from "../models/userModel";
+import {CreateUserDto, EmailConfirmationType, UserDBType, UserViewModel} from "../models/userModel";
 import { userCollection } from "../db/mongo-db";
 import { emailService } from "../services/emailService";
+import {randomUUID} from "crypto";
 
 export const userRepository = {
 
@@ -19,8 +20,26 @@ export const userRepository = {
     async doesExistByLoginOrEmail(login: string, email: string): Promise<UserDBType | null> {
         const byLogin = await this.getByLogin(login);
         if (byLogin) return byLogin;
-        const byEmail = await this.getByEmail(email);
-        return byEmail;
+        return await this.getByEmail(email);
+    },
+
+    async createUserByAdmin(input: CreateUserDto, passwordHash: string): Promise<UserViewModel
+        | { errorsMessages: { field: string; message: string }[] }> {
+
+        const newUser: UserDBType = {
+            id: Date.now().toString(),
+            login: input.login,
+            email: input.email,
+            password: passwordHash,
+            createdAt: new Date().toISOString(),
+            emailConfirmation: {
+                confirmationCode: randomUUID(),
+                expirationDate: new Date(),
+                isConfirmed: true,
+            },
+        };
+
+        return await userRepository.create(newUser);
     },
 
     async create(user: UserDBType): Promise<UserViewModel | { errorsMessages: { field: string; message: string }[] }> {
