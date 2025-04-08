@@ -23,8 +23,7 @@ export const userRepository = {
         return await this.getByEmail(email);
     },
 
-    async createUserByAdmin(input: CreateUserDto, passwordHash: string): Promise<UserViewModel
-        | { errorsMessages: { field: string; message: string }[] }> {
+    async createUserByAdmin(input: CreateUserDto, passwordHash: string): Promise<UserViewModel | null> {
 
         const newUser: UserDBType = {
             id: Date.now().toString(),
@@ -42,7 +41,7 @@ export const userRepository = {
         return await userRepository.create(newUser);
     },
 
-    async create(user: UserDBType): Promise<UserViewModel | { errorsMessages: { field: string; message: string }[] }> {
+    async create(user: UserDBType): Promise<UserViewModel | null > {
             await userCollection.insertOne(user);
         // Отправляем письмо с подтверждением
         if (!user.emailConfirmation.isConfirmed) {

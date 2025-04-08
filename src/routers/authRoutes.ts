@@ -42,12 +42,23 @@ authRouter.get('/me',
 authRouter.post('/registration',
     registrationValidators,
     inputCheckErrorsMiddleware,
-    async (req: Request, res: Response) => {
+    async (req: Request, res: Response): Promise<void>  => {
         const { login, password, email } = req.body;
 
         const existingByLogin = await userRepository.getByLogin(login);
-        if(!existingByLogin) {
-            res.sendStatus(400).json(existingByLogin);
+        if (existingByLogin) {
+            res.status(400).json({
+                errorsMessages: [{ field: "login", message: "should be unique" }]
+            });
+            return;
+        }
+
+        const existingByEmail = await userRepository.getByEmail(email);
+        if (existingByEmail) {
+           res.status(400).json({
+                errorsMessages: [{ field: "email", message: "should be unique" }]
+            });
+            return;
         }
 
         const result = await authService.register(login, password, email);
