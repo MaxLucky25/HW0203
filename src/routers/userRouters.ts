@@ -20,11 +20,7 @@ userRouter.post('/',
     inputCheckErrorsMiddleware,
     async (req: Request, res: Response) => {
         const result = await userService.createUserByAdmin(req.body);
-        if ('errorsMessages' in result) {
-            res.status(400).json(result);
-        } else {
-            res.status(201).json(result);
-        }
+        result ? res.sendStatus(204) : res.sendStatus(404);
     });
 
 userRouter.delete('/:id',

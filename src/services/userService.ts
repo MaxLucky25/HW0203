@@ -14,8 +14,7 @@ export const userService = {
         return await userRepository.delete(id);
     },
 
-    async createUserByAdmin(input: CreateUserDto): Promise<UserViewModel
-        | { errorsMessages: { field: string; message: string }[] }> {
+    async createUserByAdmin(input: CreateUserDto): Promise<UserViewModel | null > {
         const passwordHash = await bcrypt.hash(input.password, 10);
         return await userRepository.createUserByAdmin(input, passwordHash);
     }
